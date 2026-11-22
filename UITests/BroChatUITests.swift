@@ -64,9 +64,11 @@ final class BroChatUITests: XCTestCase {
         XCTAssertTrue(element("bubble-out-party").waitForExistence(timeout: 5))
         XCTAssertTrue(element("bubble-in-respect").waitForExistence(timeout: 15), "nobody bro'd back")
         shot("05-strip")
-        tap("pad-expand")
-        shot("06-all-moods")
-        tap("pad-expand")
+        if element("pad-expand").exists { // iPad always shows them all
+            tap("pad-expand")
+            shot("06-all-moods")
+            tap("pad-expand")
+        }
         tap("chat-back")
 
         // Direct
@@ -120,5 +122,57 @@ final class BroChatUITests: XCTestCase {
         XCTAssertTrue(app.buttons["OPEN UP TO BRO HERE"].waitForExistence(timeout: 5))
         XCTAssertFalse(element("send-party").exists)
         shot("13-closed")
+    }
+
+    /// Two Simulators at once, no bots: see Scripts/two-phones.sh.
+    func testTwoPhones() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["BRO_TWO_PHONES"] == "1", "needs two Simulators")
+        onboard()
+        allowPermissions()
+        let someone = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'person-'")).firstMatch
+        XCTAssertTrue(someone.waitForExistence(timeout: 150), "the other phone never appeared")
+        tap("open-strip")
+        tap("send-party")
+        let deadline = Date().addingTimeInterval(60)
+        while !element("bubble-in-party").exists, Date() < deadline { Thread.sleep(forTimeInterval: 1) }
+        XCTAssertTrue(element("bubble-in-party").exists, "never heard the other phone")
+        shot("20-two-phones")
+        Thread.sleep(forTimeInterval: 15) // stay up for the other one
+    }
+
+    func testBackgroundNotificationOpensTheChat() {
+        app.terminate()
+        app.launchArguments = ["-reset"]
+        app.launch()
+        onboard()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 5) { allow.tap() }
+        tap("person-Turbo Brad", timeout: 30)
+        tap("chat-back")
+        tap("person-Turbo Brad")
+        tap("send-angry")
+        // Out before the bot answers, a second later.
+        XCUIDevice.shared.press(.home)
+        let note = springboard.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS 'BRO?!'")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 12), "no notification")
+        shot("14-notification")
+        note.tap()
+        XCTAssertTrue(element("bubble-in-shocked").waitForExistence(timeout: 12))
+    }
+
+    func testInviteLinkAsksBeforeJoining() throws {
+        guard #available(iOS 16.4, *) else { throw XCTSkip("XCTest can't open URLs before iOS 16.4") }
+        onboard()
+        // open(_:) relaunches with the launch arguments, and -reset would wipe the onboarding.
+        app.launchArguments = ["-noNotificationPrompt"]
+        Thread.sleep(forTimeInterval: 2)
+        app.open(URL(string: "brochat://join/CAMP2345")!)
+        let join = app.alerts.buttons["Join"]
+        XCTAssertTrue(join.waitForExistence(timeout: 10), "no invite prompt")
+        join.tap()
+        XCTAssertTrue(element("chat-title").waitForExistence(timeout: 10))
     }
 }

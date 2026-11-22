@@ -32,7 +32,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([]) // The app shows its own banner.
+        // In use, the app shows its own banner. Mid-swipe to the home screen, let iOS show it.
+        completionHandler(UIApplication.shared.applicationState == .active ? [] : [.banner, .list, .sound])
     }
 
     func userNotificationCenter(

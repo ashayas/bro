@@ -59,7 +59,7 @@ struct SunsetBackground: View {
     var body: some View {
         // Overlay, so the picture's aspect ratio can't widen the layout.
         Palette.night
-            .overlay(Image("scene-strip").resizable().scaledToFill())
+            .overlay(Image(decorative: "scene-strip").resizable().scaledToFill())
             .overlay(Palette.night.opacity(dim))
             .overlay(LinearGradient(colors: [.clear, Palette.night.opacity(0.9)], startPoint: .center, endPoint: .bottom))
             .clipped()
@@ -85,7 +85,7 @@ struct Wordmark: View {
                 .shadow(color: Palette.night.opacity(0.85), radius: 0, x: size * 0.04, y: size * 0.05)
         }
         .rotationEffect(.degrees(-4))
-        .accessibilityElement()
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Bro Chat")
     }
 }
@@ -121,13 +121,8 @@ struct SunsetButtonStyle: ButtonStyle {
             .font(.display(24))
             .foregroundColor(isEnabled ? Palette.night : Palette.haze)
             .frame(maxWidth: .infinity, minHeight: 58)
+            .background(Palette.sunset.opacity(isEnabled ? 1 : 0))
             .background(Palette.plum)
-            .overlay(
-                Palette.sunset
-                    .opacity(isEnabled ? 1 : 0)
-                    .overlay(configuration.label.font(.display(24)).foregroundColor(isEnabled ? Palette.night : Palette.haze))
-                    .accessibilityHidden(true)
-            )
             .clipShape(Capsule())
             .shadow(color: Palette.pink.opacity(isEnabled ? 0.55 : 0), radius: 14, y: 4)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)

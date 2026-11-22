@@ -99,6 +99,10 @@ final class BroStore: ObservableObject {
             center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.becameActive()
             },
+            // Stop treating the chat as "being read" as soon as you start swiping away.
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.isActive = false
+            },
             center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.enteredBackground()
             },

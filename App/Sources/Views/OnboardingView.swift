@@ -23,7 +23,7 @@ struct OnboardingView: View {
     private var welcome: some View {
         ZStack {
             Palette.night
-                .overlay(Image("scene-hero").resizable().scaledToFill())
+                .overlay(Image(decorative: "scene-hero").resizable().scaledToFill())
                 .overlay(LinearGradient(colors: [.clear, .clear, Palette.night.opacity(0.95)], startPoint: .top, endPoint: .bottom))
                 .clipped()
                 .ignoresSafeArea()
@@ -78,6 +78,8 @@ struct OnboardingView: View {
                 .font(.footnote)
                 .foregroundColor(Palette.cream)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .panel()
         }
     }
 

@@ -93,10 +93,11 @@ struct ChatView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
-            Sticker(mood: .chill, size: 150)
-            Text("SAY BRO").font(.display(38)).foregroundColor(Palette.cream)
-            Text("It's all you can say.").font(.callout).foregroundColor(Palette.cream)
+        let closed = channel == .open && !store.state.isOpen
+        return VStack(spacing: 6) {
+            Sticker(mood: closed ? .sus : .chill, size: 150)
+            Text(closed ? "YOU'RE CLOSED" : "SAY BRO").font(.display(38)).foregroundColor(Palette.cream)
+            Text(closed ? "The Strip is for open bros." : "It's all you can say.").font(.callout).foregroundColor(Palette.cream)
         }
     }
 
@@ -259,16 +260,19 @@ private struct BroPad: View {
             HStack {
                 Text("PICK A BRO").font(.display(15)).foregroundColor(Palette.haze)
                 Spacer()
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
-                } label: {
-                    Label(expanded ? "Less" : "All 16", systemImage: expanded ? "chevron.down" : "chevron.up")
-                        .font(.caption.bold())
-                        .foregroundColor(Palette.pink)
-                        .frame(minWidth: 70, minHeight: 36)
-                        .contentShape(Rectangle())
+                // A wide screen always shows all sixteen.
+                if sizeClass != .regular {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+                    } label: {
+                        Label(expanded ? "Less" : "All 16", systemImage: expanded ? "chevron.down" : "chevron.up")
+                            .font(.caption.bold())
+                            .foregroundColor(Palette.pink)
+                            .frame(minWidth: 70, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("pad-expand")
                 }
-                .accessibilityIdentifier("pad-expand")
             }
             .padding(.horizontal, 14)
 

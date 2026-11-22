@@ -32,6 +32,8 @@ struct CrewsView: View {
                     .font(.caption)
                     .foregroundColor(Palette.cream)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .panel()
             }
             .padding(16)
             .readableWidth()
