@@ -18,6 +18,64 @@ An iOS chat app where the only thing you can say is **bro**, in sixteen moods an
 
 There is no text in the protocol. Names are picked from a list and a message is one byte: a mood, a direction, or "typed".
 
+## Screenshots
+
+Each file is in `docs/screenshots/`, taken from the iPhone 17 Pro Simulator.
+
+### 1. Welcome
+
+The first screen: "One word. No signal needed."
+
+![Welcome: The first screen: "One word. No signal needed."](docs/screenshots/welcome.jpg)
+
+### 2. Nearby
+
+Who is in range, with the Open to bros switch and the Strip.
+
+![Nearby: Who is in range, with the Open to bros switch and the Strip.](docs/screenshots/nearby.jpg)
+
+### 3. The Strip
+
+Everyone nearby who is open, bro-ing in moods and directions.
+
+![The Strip: Everyone nearby who is open, bro-ing in moods and directions.](docs/screenshots/strip.jpg)
+
+### 4. Typed bro
+
+The keyboard can only type bro. Anything else gets "Nice try".
+
+![Typed bro: The keyboard can only type bro. Anything else gets "Nice try".](docs/screenshots/typing.jpg)
+
+### 5. All 18 bros
+
+The full sticker pad: sixteen moods plus entrance and checkout.
+
+![All 18 bros: The full sticker pad: sixteen moods plus entrance and checkout.](docs/screenshots/all-moods.jpg)
+
+### 6. Directions
+
+"bro, go to entrance" and "bro, go to checkout" in a chat.
+
+![Directions: "bro, go to entrance" and "bro, go to checkout" in a chat.](docs/screenshots/directions.jpg)
+
+### 7. Direct
+
+A one-to-one chat with a single bro.
+
+![Direct: A one-to-one chat with a single bro.](docs/screenshots/direct.jpg)
+
+### 8. Crews
+
+Your code as a VIP Bro Pass with a QR, and joining someone else's.
+
+![Crews: Your code as a VIP Bro Pass with a QR, and joining someone else's.](docs/screenshots/crews.jpg)
+
+### 9. Notification
+
+A bro arriving while the app is in the background. Taken in the Simulator, which draws the emoji as a ? box; a real iPhone shows the emoji.
+
+![Notification: A bro arriving while the app is in the background. Taken in the Simulator, which draws the emoji as a ? box; a real iPhone shows the emoji.](docs/screenshots/notification.jpg)
+
 ## Put it on your iPhone
 
 Needs Xcode 16 or newer and iOS 15 or newer.
