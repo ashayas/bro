@@ -24,11 +24,14 @@ public struct Bro: Identifiable, Codable, Equatable {
     public let channel: Channel
     public let senderID: String
     public let name: BroName
-    public let mood: Mood
+    /// Nil for a typed bro, which has no sticker.
+    public let mood: Mood?
     public let date: Date
     public let isMine: Bool
     /// False for connectionless shouts, which can't carry a signature.
     public let isVerified: Bool
+
+    public var line: String { mood?.line ?? TypedBro.word }
 
     /// Links a "heard on air" bro to its signed copy.
     public var airToken: String { String(id.prefix(16)) }
@@ -241,8 +244,9 @@ public final class MeshNode {
 
     // MARK: Saying bro
 
+    /// A nil mood is a typed bro: the word, no sticker.
     @discardableResult
-    public func say(_ mood: Mood, in channel: Channel) -> Bro? {
+    public func say(_ mood: Mood?, in channel: Channel) -> Bro? {
         if channel == .open, !isOpen { return nil }
         let time = now()
         guard sendBudget.take(at: time), let message = post(.bro(mood), in: channel) else { return nil }
@@ -413,7 +417,7 @@ public final class MeshNode {
         }
     }
 
-    private func receiveBro(_ mood: Mood, _ message: Message, in channel: Channel, sent: Date, at time: Date) {
+    private func receiveBro(_ mood: Mood?, _ message: Message, in channel: Channel, sent: Date, at time: Date) {
         guard mayReceive(from: message.senderID, in: channel) else { return }
 
         let id = message.eventID.hex
@@ -470,7 +474,7 @@ public final class MeshNode {
         return true
     }
 
-    private func saw(_ message: Message, in channel: Channel, sent: Date, mood: Mood, isHost: Bool?) {
+    private func saw(_ message: Message, in channel: Channel, sent: Date, mood: Mood?, isHost: Bool?) {
         let time = min(sent, now())
         let id = message.senderID
         // Keep the key after they walk off, so you can still bro them and retries still seal.
@@ -484,9 +488,11 @@ public final class MeshNode {
         guard peers[id] != nil || peers.count < Self.maxPeers else { return }
 
         let old = peers[id]
-        var peer = old ?? Peer(id: id, agreementKey: message.agreementKey, name: message.name, mood: mood)
+        // Typed bros and directions don't change someone's face.
+        let face = mood.flatMap { $0.isDirection ? nil : $0 }
+        var peer = old ?? Peer(id: id, agreementKey: message.agreementKey, name: message.name, mood: face ?? .chill)
         peer.name = message.name
-        peer.mood = mood
+        if let face { peer.mood = face }
         switch channel {
         case .open:
             peer.openSeen = time

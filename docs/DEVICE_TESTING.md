@@ -9,6 +9,7 @@ For a true Bluetooth test, turn **Same Wi-Fi** off in the app under Me on every 
 - [ ] Both open, screens on: they see each other within about 15 seconds.
 - [ ] Airplane mode with Bluetooth back on: still works.
 - [ ] Strip, direct and crew bros all arrive. Direct shows "Bro'd".
+- [ ] Typed bro, entrance and checkout all arrive, including with Wi-Fi off. Update both phones first.
 - [ ] Both code only with no shared code: neither sees the other.
 - [ ] Share a code: both appear in the crew.
 - [ ] Scan the QR with the Camera: the join prompt opens.

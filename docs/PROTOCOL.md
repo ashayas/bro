@@ -14,6 +14,8 @@ An envelope is `version | ttl | kind | payload`. Its ID is a hash of kind and pa
 
 A message is Ed25519-signed over its channel, so it can't be replayed into another one. Its body is presence (mood, host flag), bro (mood), ack (message ID) or goodbye. All fixed size, no strings.
 
+The mood byte is 0-15 for moods, 16 for "go to entrance", 17 for "go to checkout" and `0xFF` for a typed bro (no sticker). Builds older than these values drop such messages, so update every phone together.
+
 ## Who hears you
 
 | Receiver is | The Strip | Direct | Crew |

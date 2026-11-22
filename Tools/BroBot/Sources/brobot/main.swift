@@ -10,7 +10,7 @@ brobot: a bro that lives on your Mac, for testing Bro Chat with one iPhone.
   --echo           bro back at whoever bros you
   --name A,B       name indices, 0...31 each
   --mood SLUG      your face (happy, angry, party, ...)
-  --say SLUG       bro on the Strip (and in the crew) every --every seconds
+  --say SLUG       ("typed" for no sticker) bro on the Strip (and in the crew) every --every seconds
   --every N        default 10
   --ble / --lan    use only that radio (default: both)
   --for N          exit after N seconds
@@ -55,7 +55,7 @@ for radio in radios {
 node.onEvent = { event in
     switch event {
     case let .bro(bro):
-        print("bro \(bro.channel) \(bro.name.text): \(bro.mood.line)\(bro.isVerified ? "" : " (heard on air)")")
+        print("bro \(bro.channel) \(bro.name.text): \(bro.line)\(bro.isVerified ? "" : " (heard on air)")")
         // Answering another bot's answer would loop forever, so never echo a respect.
         guard has("--echo"), bro.isVerified, bro.mood != .respect else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -73,7 +73,8 @@ node.onEvent = { event in
 print("\(name.text) is up\(node.isOpen ? ", open" : ", code only")\(room.map { ", crew \($0.code)" } ?? "")")
 node.start()
 
-if let mood = value("--say").flatMap({ Mood(slug: $0) }) {
+if let slug = value("--say"), slug == "typed" || Mood(slug: slug) != nil {
+    let mood = Mood(slug: slug)
     let interval = value("--every").flatMap(Double.init) ?? 10
     Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
         if node.isOpen { node.say(mood, in: .open) }

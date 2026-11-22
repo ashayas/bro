@@ -44,14 +44,14 @@ struct Envelope {
 
 enum Body: Equatable {
     case presence(mood: Mood, isHost: Bool)
-    case bro(Mood)
+    case bro(Mood?)
     case ack(Data)
     case goodbye
 
     var encoded: Data {
         switch self {
         case let .presence(mood, isHost): return Data([1, mood.rawValue, isHost ? 1 : 0])
-        case let .bro(mood): return Data([2, mood.rawValue])
+        case let .bro(mood): return Data([2, TypedBro.byte(for: mood)])
         case let .ack(id): return Data([3]) + id
         case .goodbye: return Data([4])
         }
@@ -65,7 +65,7 @@ enum Body: Equatable {
                   let flag = reader.byte(), flag <= 1 else { return nil }
             self = .presence(mood: mood, isHost: flag == 1)
         case 2:
-            guard let mood = reader.byte().flatMap(Mood.init(rawValue:)) else { return nil }
+            guard let byte = reader.byte(), let mood = TypedBro.mood(from: byte) else { return nil }
             self = .bro(mood)
         case 3:
             guard let id = reader.data(16) else { return nil }

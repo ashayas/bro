@@ -11,21 +11,25 @@ final class Feedback {
     private var sessionReady = false
     private lazy var voice = Self.pickVoice()
 
-    func sent(_ mood: Mood) {
+    func sent(_ mood: Mood?) {
         play("send")
         speak(mood)
         buzz(mood)
     }
 
-    func received(_ mood: Mood) {
+    func received(_ mood: Mood?) {
         play("receive")
         speak(mood)
         buzz(mood)
     }
 
-    func replay(_ mood: Mood) {
+    func replay(_ mood: Mood?) {
         speak(mood)
         buzz(mood)
+    }
+
+    func rejected() {
+        if settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.error) }
     }
 
     func joined() {
@@ -55,11 +59,11 @@ final class Feedback {
         players[name]?.play()
     }
 
-    private func speak(_ mood: Mood) {
+    private func speak(_ mood: Mood?) {
         guard settings.voice, !UIAccessibility.isVoiceOverRunning else { return }
         prepareSession()
         speech.stopSpeaking(at: .immediate)
-        let delivery = mood.delivery
+        let delivery = mood?.delivery ?? (text: "Bro.", pitch: 1, rate: 0.45, volume: 1)
         let utterance = AVSpeechUtterance(string: delivery.text)
         utterance.voice = voice
         utterance.pitchMultiplier = delivery.pitch
@@ -69,14 +73,14 @@ final class Feedback {
         speech.speak(utterance)
     }
 
-    private func buzz(_ mood: Mood) {
+    private func buzz(_ mood: Mood?) {
         guard settings.haptics else { return }
         switch mood {
         case .angry, .sos, .shocked:
             UINotificationFeedbackGenerator().notificationOccurred(.error)
         case .party, .hype, .laughing:
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-        case .flex, .respect:
+        case .flex, .respect, .entrance, .checkout:
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         case .sleepy, .chill, .sad:
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
@@ -114,6 +118,8 @@ private extension Mood {
         case .sleepy: return ("Bro.", 0.55, 0.1, 0.5)
         case .wrecked: return ("Bro.", 0.5, 0.15, 0.7)
         case .sos: return ("Bro? Bro?", 1.65, 0.5, 1)
+        case .entrance: return ("Bro, go to the entrance!", 1.15, 0.52, 1)
+        case .checkout: return ("Bro, go to the checkout!", 1.15, 0.52, 1)
         }
     }
 }

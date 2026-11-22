@@ -211,6 +211,14 @@ final class BLETransportTests: XCTestCase {
         until("room for the newcomer", timeout: 9) { me.radio.links.count == 2 }
     }
 
+    func testTypedAndDirectionBrosCrossBluetooth() {
+        Air.shared.mtu = 23
+        let a = phone(), b = phone()
+        until("discovery") { a.sees(b) && b.sees(a) }
+        for mood: Mood? in [nil, .entrance, .checkout] { a.node.say(mood, in: .direct(b.node.myID)) }
+        until("all three") { b.verified.map(\.mood) == [nil, .entrance, .checkout] }
+    }
+
     func testPermissionDenied() {
         let device = Air.shared.device()
         device.authorized = false

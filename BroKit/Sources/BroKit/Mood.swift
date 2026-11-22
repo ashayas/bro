@@ -5,6 +5,7 @@ import Foundation
 public enum Mood: UInt8, CaseIterable, Codable, Hashable {
     case happy = 0, angry, party, chill, hype, laughing, love, flex
     case respect, sus, shocked, confused, sad, sleepy, wrecked, sos
+    case entrance, checkout
 
     private var info: (slug: String, title: String, line: String, emoji: String) {
         switch self {
@@ -24,12 +25,18 @@ public enum Mood: UInt8, CaseIterable, Codable, Hashable {
         case .sleepy: return ("sleepy", "Sleepy", "brozzz", "😴")
         case .wrecked: return ("wrecked", "Wrecked", "brughh", "🤢")
         case .sos: return ("sos", "Where u at", "bro?!?!", "🔦")
+        case .entrance: return ("entrance", "Entrance", "bro, go to entrance", "🚪")
+        case .checkout: return ("checkout", "Checkout", "bro, go to checkout", "🛒")
         }
     }
 
     public var slug: String { info.slug }
     public var title: String { info.title }
-    /// Every line is a way of saying bro. That is the rule.
+    /// Directions tell a bro where to go, so they don't work as someone's face.
+    public var isDirection: Bool { self == .entrance || self == .checkout }
+    public static var faces: [Mood] { allCases.filter { !$0.isDirection } }
+
+    /// Every line starts with bro. That is the rule.
     public var line: String { info.line }
     public var emoji: String { info.emoji }
 

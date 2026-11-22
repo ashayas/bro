@@ -163,6 +163,26 @@ final class MeshTests: XCTestCase {
         XCTAssertNotNil(a.node.say(.sos, in: .direct(b.id)))
     }
 
+    func testTypedBroArrivesInEveryChannel() {
+        let net = TestNet(), a = net.user(rooms: [camp]), b = net.user(rooms: [camp])
+        net.connect(a, b); net.settle()
+        for channel in [Channel.open, .room(camp.id), .direct(b.id)] { a.node.say(nil, in: channel) }
+        net.deliver()
+        XCTAssertEqual(b.bros.count, 3)
+        XCTAssertTrue(b.bros.allSatisfy { $0.mood == nil && $0.line == "bro" })
+        let bro = b.bros[0]
+        XCTAssertEqual(try JSONDecoder().decode(Bro.self, from: JSONEncoder().encode(bro)), bro)
+    }
+
+    func testTypingAndDirectionsDoNotChangeYourFace() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle()
+        for mood: Mood? in [nil, .entrance, .checkout] { a.node.say(mood, in: .open) }
+        net.deliver()
+        XCTAssertEqual(b.bros.map(\.mood), [nil, .entrance, .checkout])
+        XCTAssertEqual(b.node.peers[a.id]?.mood, .happy)
+    }
+
     func testPresenceExpires() {
         let net = TestNet(), a = net.user(), b = net.user()
         net.connect(a, b); net.settle(); net.disconnect(a, b)

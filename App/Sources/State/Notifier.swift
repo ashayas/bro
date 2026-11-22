@@ -17,13 +17,13 @@ struct Notifier {
     func post(_ bro: Bro, title: String, badge: Int) {
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = "\(bro.mood.emoji) \(bro.mood.line)"
+        content.body = bro.mood.map { "\($0.emoji) \($0.line)" } ?? bro.line
         content.sound = UNNotificationSound(named: UNNotificationSoundName("receive.wav"))
         content.badge = NSNumber(value: badge)
         if let data = try? JSONEncoder().encode(bro.channel) {
             content.userInfo = [Self.channelKey: data]
         }
-        if let attachment = sticker(bro.mood) { content.attachments = [attachment] }
+        if let mood = bro.mood, let attachment = sticker(mood) { content.attachments = [attachment] }
         center.add(UNNotificationRequest(identifier: bro.id, content: content, trigger: nil))
     }
 

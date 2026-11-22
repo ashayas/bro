@@ -124,6 +124,47 @@ final class BroChatUITests: XCTestCase {
         shot("13-closed")
     }
 
+    func testTypedBroAndDirections() {
+        onboard()
+        tap("open-strip")
+
+        tap("type-bro")
+        let field = app.textFields["type-bro"].firstMatch
+        field.typeText("x")
+        XCTAssertTrue(element("banner").waitForExistence(timeout: 3), "no telling off")
+        XCTAssertNotEqual(field.value as? String, "x")
+        field.typeText("bxrzo")
+        XCTAssertEqual(field.value as? String, "bro")
+        shot("15-typing")
+        field.typeText("\n")
+        XCTAssertTrue(element("bubble-out-typed").waitForExistence(timeout: 5), "typed bro not sent")
+
+        field.typeText("Bro")
+        tap("send-typed")
+        let typed = app.buttons.matching(identifier: "bubble-out-typed")
+        let deadline = Date().addingTimeInterval(5)
+        while typed.count < 2, Date() < deadline { Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertEqual(typed.count, 2, "send button")
+        shot("16-typed")
+        tap("pad-stickers")
+
+        if element("pad-expand").exists { tap("pad-expand") }
+        shot("17-all-eighteen")
+        tap("send-entrance")
+        XCTAssertTrue(element("bubble-out-entrance").waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.2)
+        tap("send-checkout")
+        XCTAssertTrue(element("bubble-out-checkout").waitForExistence(timeout: 5))
+        if element("pad-expand").exists { tap("pad-expand") }
+        shot("18-directions")
+
+        app.terminate()
+        app.launchArguments = ["-noNotificationPrompt"]
+        app.launch()
+        tap("open-strip", timeout: 15)
+        XCTAssertTrue(element("bubble-out-checkout").waitForExistence(timeout: 8), "lost on relaunch")
+    }
+
     /// Two Simulators at once, no bots: see Scripts/two-phones.sh.
     func testTwoPhones() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["BRO_TWO_PHONES"] == "1", "needs two Simulators")
@@ -133,10 +174,16 @@ final class BroChatUITests: XCTestCase {
             .matching(NSPredicate(format: "identifier BEGINSWITH 'person-'")).firstMatch
         XCTAssertTrue(someone.waitForExistence(timeout: 150), "the other phone never appeared")
         tap("open-strip")
-        tap("send-party")
-        let deadline = Date().addingTimeInterval(60)
-        while !element("bubble-in-party").exists, Date() < deadline { Thread.sleep(forTimeInterval: 1) }
-        XCTAssertTrue(element("bubble-in-party").exists, "never heard the other phone")
+        tap("type-bro")
+        app.textFields["type-bro"].firstMatch.typeText("bro\n")
+        tap("pad-stickers")
+        tap("pad-expand")
+        tap("send-entrance")
+        tap("send-checkout")
+        tap("pad-expand")
+        for slug in ["typed", "entrance", "checkout"] {
+            XCTAssertTrue(element("bubble-in-\(slug)").waitForExistence(timeout: 60), "never heard \(slug) from the other phone")
+        }
         shot("20-two-phones")
         Thread.sleep(forTimeInterval: 15) // stay up for the other one
     }

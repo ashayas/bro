@@ -84,6 +84,10 @@ private struct Performance: AnimatableModifier {
         case .respect:
             y = -envelope * 10
             scale += envelope * 0.08
+        case .entrance, .checkout:
+            // Lunges the way it's pointing.
+            x = abs(wave) * 14
+            scale += envelope * 0.1
         case .sad, .sleepy, .wrecked:
             y = envelope * 8
             angle = -envelope * 14

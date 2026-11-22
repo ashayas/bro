@@ -14,3 +14,5 @@ sad|heartbroken, shades pushed up on the sweatband, huge watery puppy eyes, trem
 sleepy|fast asleep, shades crooked, closed eyes, mouth open drooling, snot bubble, head resting on a small pink pillow
 wrecked|brutally hungover and queasy, pale lavender sick face, dark eye bags, shades broken and hanging, sweatband askew, messy hair, ice bag on top of his head
 sos|lost in the woods at night and panicking, wide worried eyes over the shades, holding a lit flashlight, twigs and an orange leaf in his hair, sweat drops, a small owl on his shoulder
+entrance|telling you to go to the entrance, pointing at a glowing doorway with a pink arrow going in
+checkout|telling you to go to the checkout, pointing at a pink cash register, holding a shopping basket

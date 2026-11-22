@@ -33,7 +33,7 @@ struct NearbyView: View {
                         if case let .direct(id) = thread.channel {
                             PersonRow(
                                 id: id, title: store.name(of: id), mood: store.mood(of: id),
-                                detail: thread.mood.line, unread: store.state.unread[thread.channel] ?? 0
+                                detail: thread.line, unread: store.state.unread[thread.channel] ?? 0
                             )
                         }
                     }
@@ -71,7 +71,7 @@ struct NearbyView: View {
     private var stripDetail: String {
         guard store.state.isOpen else { return "You're closed. Open up to hear the Strip." }
         guard let last = store.lastBro(in: .open) else { return "Bro at everyone open around you." }
-        return "\(last.isMine ? "You" : last.name.text): \(last.mood.line)"
+        return "\(last.isMine ? "You" : last.name.text): \(last.line)"
     }
 }
 

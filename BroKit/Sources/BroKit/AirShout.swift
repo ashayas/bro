@@ -12,11 +12,12 @@ import Foundation
 public struct AirShout: Equatable {
     private static let header = Data([0xB7, 0x0B, 0x01])
 
-    public let mood: Mood
+    /// Nil for a typed bro.
+    public let mood: Mood?
     public let name: BroName
     public let token: Data
 
-    init(mood: Mood, name: BroName, eventID: Data) {
+    init(mood: Mood?, name: BroName, eventID: Data) {
         self.mood = mood
         self.name = name
         token = Data(eventID.prefix(8))
@@ -35,7 +36,7 @@ public struct AirShout: Equatable {
     }
 
     func uuidBytes(at date: Date = Date()) -> Data {
-        let content = Self.header + Data([mood.rawValue, name.first, name.last]) + token
+        let content = Self.header + Data([TypedBro.byte(for: mood), name.first, name.last]) + token
         return content + Self.checksum(content, window: Self.window(at: date))
     }
 
@@ -43,7 +44,7 @@ public struct AirShout: Equatable {
         guard uuidBytes.count == 16 else { return nil }
         var reader = ByteReader(uuidBytes)
         guard reader.data(3) == Self.header,
-              let mood = reader.byte().flatMap(Mood.init(rawValue:)),
+              let byte = reader.byte(), let mood = TypedBro.mood(from: byte),
               let first = reader.byte(), let last = reader.byte(),
               let name = BroName(first: first, last: last),
               let token = reader.data(8), let checksum = reader.data(2),

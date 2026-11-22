@@ -30,8 +30,8 @@ extension Mood {
         case .angry, .sos: return Color(red: 1, green: 0.30, blue: 0.30)
         case .party, .love, .shocked: return Palette.pink
         case .hype, .laughing, .happy: return Palette.orange
-        case .chill, .sus: return Palette.mint
-        case .flex, .respect: return Palette.gold
+        case .chill, .sus, .checkout: return Palette.mint
+        case .flex, .respect, .entrance: return Palette.gold
         case .confused, .sad, .sleepy, .wrecked: return Palette.violet
         }
     }

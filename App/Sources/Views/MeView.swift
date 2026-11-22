@@ -55,7 +55,7 @@ struct MeView: View {
                 group {
                     fact("No accounts, servers, analytics or internet.")
                     fact("Crew and direct bros are end-to-end encrypted. The Strip is public.")
-                    fact("No text field exists in the protocol. It is physically only bro.")
+                    fact("No text exists in the protocol. Even the keyboard can only type bro.")
                     fact("Force-quit the app and you go dark until you open it again.")
                 }
 

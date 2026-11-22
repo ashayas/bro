@@ -26,6 +26,7 @@
 		B586E2CA599AC2EED8DC068C /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA827BBE071ED9B55CBB8A98 /* Notifier.swift */; };
 		B86098555CCCD4F733F33876 /* receive.wav in Resources */ = {isa = PBXBuildFile; fileRef = C663DBD9A77A0DEFB06B591C /* receive.wav */; };
 		B95524413BD3B29B4AD4758F /* join.wav in Resources */ = {isa = PBXBuildFile; fileRef = 06B9B566EE63A281600E4B21 /* join.wav */; };
+		CD70C7AF213F2609E7F84EB0 /* TypeBroField.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02E717DE75390DAE55E2CC8 /* TypeBroField.swift */; };
 		E839CDB10B05833AA8402629 /* send.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1CF645D21502A939F185AC3 /* send.wav */; };
 		E8D1FD480E90D4A49BCC29BC /* BroChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A565346B1D0D108819398A60 /* BroChatApp.swift */; };
 		EC631883C5B074F462B463D6 /* Sticker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C68C947A559CBC924BEEE486 /* Sticker.swift */; };
@@ -64,6 +65,7 @@
 		C68C947A559CBC924BEEE486 /* Sticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sticker.swift; sourceTree = "<group>"; };
 		DB30C03B49A991ACB54385A9 /* BroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroStore.swift; sourceTree = "<group>"; };
 		DBE557D244A3176BD032F7D0 /* BroChat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BroChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E02E717DE75390DAE55E2CC8 /* TypeBroField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeBroField.swift; sourceTree = "<group>"; };
 		E091EE9AA81BB2127510CB28 /* BroChatUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BroChatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E540DDB45A9344BEAFC5F32C /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
 		E8624006BE92A1241934FEC8 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 				1657EA6B4E340E332EB56A2A /* NearbyView.swift */,
 				7BCA72A8FC16ED0F991E4D90 /* OnboardingView.swift */,
 				5D60713D3CE698097B72584E /* RootView.swift */,
+				E02E717DE75390DAE55E2CC8 /* TypeBroField.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -336,6 +339,7 @@
 				1E113EE4221F193554C51175 /* SavedState.swift in Sources */,
 				EC631883C5B074F462B463D6 /* Sticker.swift in Sources */,
 				3F1571B37570EC915C255F43 /* Theme.swift in Sources */,
+				CD70C7AF213F2609E7F84EB0 /* TypeBroField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

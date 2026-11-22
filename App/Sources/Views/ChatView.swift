@@ -5,6 +5,7 @@ struct ChatView: View {
     @EnvironmentObject private var store: BroStore
     let channel: Channel
     @State private var blast: Bro?
+    @State private var typing = false
 
     var body: some View {
         let bros = store.bros(in: channel)
@@ -18,8 +19,8 @@ struct ChatView: View {
                     } else {
                         timeline(bros)
                     }
-                    if let blast {
-                        BroBlast(bro: blast) { self.blast = nil }.id(blast.id)
+                    if let blast, let mood = blast.mood {
+                        BroBlast(mood: mood) { self.blast = nil }.id(blast.id)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,24 +32,31 @@ struct ChatView: View {
                         .padding(16)
                         .readableWidth()
                 } else {
-                    BroPad { store.say($0, in: channel) }
+                    BroPad(typing: $typing, send: { store.say($0, in: channel) }, rejected: store.rejectTyping)
                 }
             }
         }
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 24).onEnded { value in
-                if value.startLocation.x < 28 && value.translation.width > 70 { store.closeChat() }
+                if value.startLocation.x < 28 && value.translation.width > 70 {
+                    typing = false
+                    store.closeChat()
+                }
             }
         )
         .onChange(of: store.latestBroID) { id in
-            blast = store.bros(in: channel).last { $0.id == id }
+            // Typed bros have no sticker to blow up.
+            blast = store.bros(in: channel).last { $0.id == id && $0.mood != nil }
         }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Button(action: store.closeChat) {
+            Button {
+                typing = false
+                store.closeChat()
+            } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .heavy))
                     .foregroundColor(Palette.pink)
@@ -95,7 +103,7 @@ struct ChatView: View {
     private var emptyState: some View {
         let closed = channel == .open && !store.state.isOpen
         return VStack(spacing: 6) {
-            Sticker(mood: closed ? .sus : .chill, size: 150)
+            Sticker(mood: closed ? .sus : .chill, size: typing ? 80 : 150)
             Text(closed ? "YOU'RE CLOSED" : "SAY BRO").font(.display(38)).foregroundColor(Palette.cream)
             Text(closed ? "The Strip is for open bros." : "It's all you can say.").font(.callout).foregroundColor(Palette.cream)
         }
@@ -120,6 +128,13 @@ struct ChatView: View {
             }
             .onAppear { scrollToEnd(proxy, bros.last?.id, animated: false) }
             .onChange(of: bros.last?.id) { scrollToEnd(proxy, $0, animated: true) }
+            .onChange(of: typing) { isTyping in
+                guard isTyping else { return }
+                // After the keyboard has finished resizing us.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    scrollToEnd(proxy, bros.last?.id, animated: true)
+                }
+            }
         }
     }
 
@@ -162,19 +177,23 @@ private struct BroBubble: View {
                 plays += 1
                 store.replay(bro)
             } label: {
-                HStack(spacing: -4) {
-                    if bro.isMine {
-                        line
-                        sticker
-                    } else {
-                        sticker
-                        line
+                if let mood = bro.mood {
+                    HStack(spacing: -4) {
+                        if bro.isMine {
+                            line(mood)
+                            sticker(mood)
+                        } else {
+                            sticker(mood)
+                            line(mood)
+                        }
                     }
+                } else {
+                    typedLine
                 }
             }
             .buttonStyle(SquishButtonStyle())
-            .accessibilityLabel("\(bro.isMine ? "You" : bro.name.text), \(bro.mood.title) bro")
-            .accessibilityIdentifier("bubble-\(bro.isMine ? "out" : "in")-\(bro.mood.slug)")
+            .accessibilityLabel("\(bro.isMine ? "You" : bro.name.text), \(bro.line)")
+            .accessibilityIdentifier("bubble-\(bro.isMine ? "out" : "in")-\(bro.mood?.slug ?? "typed")")
             .contextMenu {
                 if !bro.isMine && bro.isVerified {
                     Button { store.show(.direct(bro.senderID)) } label: { Label("Bro them directly", systemImage: "paperplane.fill") }
@@ -190,19 +209,29 @@ private struct BroBubble: View {
         .frame(maxWidth: .infinity, alignment: bro.isMine ? .trailing : .leading)
     }
 
-    private var sticker: some View {
-        PerformingSticker(mood: bro.mood, size: 112, trigger: plays).zIndex(1)
+    private var typedLine: some View {
+        Text(bro.line)
+            .font(.title3.bold())
+            .foregroundColor(bro.isMine ? Palette.night : Palette.cream)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(bro.isMine ? Palette.pink : Palette.plum))
+            .padding(.vertical, 4)
     }
 
-    private var line: some View {
-        Text(bro.mood.line)
+    private func sticker(_ mood: Mood) -> some View {
+        PerformingSticker(mood: mood, size: 112, trigger: plays).zIndex(1)
+    }
+
+    private func line(_ mood: Mood) -> some View {
+        Text(mood.line)
             .font(.display(25))
-            .foregroundColor(bro.mood.ink)
+            .foregroundColor(mood.ink)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(Capsule().fill(bro.mood.tint))
+            .background(Capsule().fill(mood.tint))
             .rotationEffect(.degrees(bro.isMine ? -3 : 3))
     }
 
@@ -218,7 +247,7 @@ private struct BroBubble: View {
 
 /// The big one that pops when a bro lands.
 private struct BroBlast: View {
-    let bro: Bro
+    let mood: Mood
     let done: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
@@ -226,13 +255,16 @@ private struct BroBlast: View {
 
     var body: some View {
         VStack(spacing: -14) {
-            PerformingSticker(mood: bro.mood, size: 230, trigger: shown ? 1 : 0)
-            Text(bro.mood.line)
-                .font(.display(52))
-                .foregroundColor(bro.mood.ink)
+            PerformingSticker(mood: mood, size: 230, trigger: shown ? 1 : 0)
+            Text(mood.line)
+                // Directions are a sentence, not a shout.
+                .font(.display(mood.isDirection ? 36 : 52))
+                .foregroundColor(mood.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 2)
-                .background(Capsule().fill(bro.mood.tint))
+                .background(Capsule().fill(mood.tint))
                 .rotationEffect(.degrees(-6))
         }
         .scaleEffect(reduceMotion ? 1 : (leaving ? 1.25 : shown ? 1 : 0.3))
@@ -249,45 +281,39 @@ private struct BroBlast: View {
     }
 }
 
-/// The keyboard. There is no other keyboard.
+/// The stickers, plus a keyboard that can only type bro.
 private struct BroPad: View {
-    let send: (Mood) -> Void
+    @Binding var typing: Bool
+    let send: (Mood?) -> Void
+    let rejected: () -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var expanded = false
 
+    private var isWide: Bool { sizeClass == .regular }
+
     var body: some View {
         VStack(spacing: 4) {
-            HStack {
-                Text("PICK A BRO").font(.display(15)).foregroundColor(Palette.haze)
-                Spacer()
-                // A wide screen always shows all sixteen.
-                if sizeClass != .regular {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
-                    } label: {
-                        Label(expanded ? "Less" : "All 16", systemImage: expanded ? "chevron.down" : "chevron.up")
-                            .font(.caption.bold())
-                            .foregroundColor(Palette.pink)
-                            .frame(minWidth: 70, minHeight: 44)
-                            .contentShape(Rectangle())
+            HStack(spacing: 8) {
+                TypeBroField(isTyping: $typing, send: { send(nil) }, rejected: rejected)
+                if typing {
+                    toggle("Stickers", symbol: "keyboard.chevron.compact.down", identifier: "pad-stickers") {
+                        typing = false
                     }
-                    .accessibilityIdentifier("pad-expand")
+                } else if !isWide {
+                    // A wide screen always shows them all.
+                    toggle(
+                        expanded ? "Less" : "All \(Mood.allCases.count)",
+                        symbol: expanded ? "chevron.down" : "chevron.up", identifier: "pad-expand"
+                    ) {
+                        withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+                    }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
 
-            if expanded || sizeClass == .regular {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: sizeClass == .regular ? 8 : 4), spacing: 4) {
-                    ForEach(Mood.allCases, id: \.self, content: key)
-                }
-                .padding(.horizontal, 8)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 2) {
-                        ForEach(Mood.allCases, id: \.self) { key($0).frame(width: 86) }
-                    }
-                    .padding(.horizontal, 8)
-                }
+            // The system keyboard needs the room.
+            if !typing {
+                stickers
             }
         }
         .padding(.vertical, 5)
@@ -295,12 +321,41 @@ private struct BroPad: View {
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 
-    private func key(_ mood: Mood) -> some View {
+    @ViewBuilder private var stickers: some View {
+        if expanded || isWide {
+            // Five across keeps eighteen to four rows, which still fits an iPhone SE.
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: isWide ? 9 : 5)
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(Mood.allCases, id: \.self) { key($0, size: isWide ? 70 : 62) }
+            }
+            .padding(.horizontal, 6)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(Mood.allCases, id: \.self) { key($0, size: 70).frame(width: 86) }
+                }
+                .padding(.horizontal, 8)
+            }
+        }
+    }
+
+    private func toggle(_ title: String, symbol: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.caption.bold())
+                .foregroundColor(Palette.pink)
+                .frame(minWidth: 70, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func key(_ mood: Mood, size: CGFloat) -> some View {
         Button {
             send(mood)
         } label: {
             VStack(spacing: -3) {
-                Sticker(mood: mood, size: 70)
+                Sticker(mood: mood, size: size)
                 Text(mood.title.uppercased())
                     .font(.display(12))
                     .foregroundColor(mood.label)

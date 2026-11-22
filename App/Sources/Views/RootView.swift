@@ -58,10 +58,10 @@ private struct BannerView: View {
             if let channel = banner.channel { store.show(channel) } else { store.dismissBanner() }
         } label: {
             HStack(spacing: 12) {
-                Sticker(mood: banner.mood, size: 58)
+                if let mood = banner.mood { Sticker(mood: mood, size: 58) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(banner.title).font(.subheadline.bold()).foregroundColor(Palette.cream).lineLimit(1)
-                    Text(banner.detail).font(.display(19)).foregroundColor(banner.mood.label).lineLimit(2)
+                    Text(banner.detail).font(.display(19)).foregroundColor(banner.mood?.label ?? Palette.cream).lineLimit(2)
                 }
                 Spacer(minLength: 0)
             }
@@ -69,7 +69,7 @@ private struct BannerView: View {
             .padding(.vertical, 8)
             .background(Palette.night.opacity(0.97))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(banner.mood.tint, lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(banner.mood?.tint ?? Palette.pink, lineWidth: 2))
         }
         .buttonStyle(SquishButtonStyle())
         .padding(.horizontal, 12)

@@ -11,7 +11,7 @@ final class WireTests: XCTestCase {
 
     func testEveryBodyRoundTrips() {
         let ack = Body.ack(Data(repeating: 7, count: 16))
-        let bodies = Mood.allCases.map(Body.bro) + [.presence(mood: .sus, isHost: true), ack, .goodbye]
+        let bodies = Mood.allCases.map { Body.bro($0) } + [.bro(nil), .presence(mood: .sus, isHost: true), ack, .goodbye]
         for body in bodies {
             let sent = message(body)
             let got = Message(sent.signed, kind: .open, context: Data())
@@ -48,8 +48,49 @@ final class WireTests: XCTestCase {
     }
 
     func testEveryLineIsBro() {
-        XCTAssertEqual(Mood.allCases.count, 16)
+        XCTAssertEqual(Mood.allCases.count, 18)
+        XCTAssertEqual(Mood.faces.count, 16)
         XCTAssertTrue(Mood.allCases.allSatisfy { $0.line.lowercased().hasPrefix("br") })
+    }
+
+    func testWireValuesNeverMove() {
+        XCTAssertEqual([Mood.happy, .sos, .entrance, .checkout].map(\.rawValue), [0, 15, 16, 17])
+        XCTAssertEqual(Body.bro(nil).encoded, Data([2, 0xFF]))
+        XCTAssertEqual(Body.bro(.checkout).encoded, Data([2, 17]))
+    }
+
+    func testDirectionsSayWhereToGo() {
+        XCTAssertEqual(Mood.entrance.line, "bro, go to entrance")
+        XCTAssertEqual(Mood.checkout.line, "bro, go to checkout")
+    }
+
+    func testTheKeyboardOnlyTypesBro() {
+        for (input, shown) in [("", ""), ("b", "b"), ("Br", "br"), ("BRO", "bro"), ("bro ", "bro"), (" ", "")] {
+            XCTAssertEqual(TypedBro.accept(input), shown, input)
+        }
+        for bad in ["x", "hello", "brx", "broo", "bro!", "b r o", "r", "o", "bró", "🤙", "bro\u{200B}x"] {
+            XCTAssertNil(TypedBro.accept(bad), bad)
+        }
+    }
+
+    func testTypedAndDirectionShoutsFitInAUUID() {
+        for mood: Mood? in [nil, .entrance, .checkout] {
+            let shout = AirShout(mood: mood, name: broName, eventID: Data(repeating: 9, count: 16))
+            let decoded = AirShout(uuidBytes: shout.uuidBytes())
+            XCTAssertEqual(decoded, shout)
+        }
+    }
+
+    func testHistorySavedBeforeTypedBrosStillLoads() throws {
+        struct OldBro: Encodable {
+            let id = "1", senderID = "2"
+            let channel = Channel.open
+            let name = BroName(first: 0, last: 1)!
+            let mood = Mood.party
+            let date = Date()
+            let isMine = false, isVerified = true
+        }
+        XCTAssertEqual(try JSONDecoder().decode(Bro.self, from: JSONEncoder().encode(OldBro())).mood, .party)
     }
 
     func testLargestEnvelopeFits() {

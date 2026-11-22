@@ -58,7 +58,7 @@ struct OnboardingView: View {
         } content: {
             Sticker(mood: mood, size: 180)
             NamePicker(name: $name)
-            Text("No typing. Typing is how words get in.").font(.footnote).foregroundColor(Palette.haze)
+            Text("No typing names. That is how words get in.").font(.footnote).foregroundColor(Palette.haze)
             MoodFacePicker(selection: $mood)
         }
     }
@@ -180,7 +180,7 @@ struct MoodFacePicker: View {
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(Mood.allCases, id: \.self) { mood in
+            ForEach(Mood.faces, id: \.self) { mood in
                 Button {
                     selection = mood
                 } label: {

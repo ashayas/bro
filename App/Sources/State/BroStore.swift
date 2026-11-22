@@ -5,7 +5,8 @@ import UIKit
 
 struct Banner: Equatable, Identifiable {
     let id = UUID()
-    let mood: Mood
+    /// Nil shows no sticker.
+    let mood: Mood?
     let title: String
     let detail: String
     var channel: Channel?
@@ -148,7 +149,7 @@ final class BroStore: ObservableObject {
         save()
     }
 
-    func say(_ mood: Mood, in channel: Channel) {
+    func say(_ mood: Mood?, in channel: Channel) {
         guard let bro = node.say(mood, in: channel) else {
             let closed = channel == .open && !state.isOpen
             show(Banner(
@@ -163,6 +164,11 @@ final class BroStore: ObservableObject {
         latestBroID = bro.id
         feedback.sent(mood)
         save()
+    }
+
+    func rejectTyping() {
+        feedback.rejected()
+        show(Banner(mood: .sus, title: "Nice try", detail: "You can only type bro."))
     }
 
     func replay(_ bro: Bro) {
@@ -383,7 +389,8 @@ final class BroStore: ObservableObject {
         append(bro)
         if bro.isVerified {
             state.people[bro.senderID] = Person(
-                name: bro.name, mood: bro.mood,
+                name: bro.name,
+                mood: node.peers[bro.senderID]?.mood ?? state.people[bro.senderID]?.mood ?? .chill,
                 key: node.contacts[bro.senderID] ?? node.peers[bro.senderID]?.agreementKey
             )
             state.roommates = node.roommates
@@ -397,7 +404,7 @@ final class BroStore: ObservableObject {
             state.unread[bro.channel, default: 0] += 1
             let title = bro.channel.isDirect ? bro.name.text : "\(bro.name.text) · \(title(of: bro.channel))"
             if isActive {
-                show(Banner(mood: bro.mood, title: title, detail: bro.mood.line, channel: bro.channel))
+                show(Banner(mood: bro.mood, title: title, detail: bro.line, channel: bro.channel))
                 // The Strip can be a crowd. Only talk out loud for bros aimed at you.
                 if bro.channel != .open { feedback.received(bro.mood) }
             } else if state.settings.notifications, bro.channel != .open {

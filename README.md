@@ -1,20 +1,22 @@
 # Bro Chat
 
-An iOS chat app where the only thing you can say is **bro**, in sixteen moods, to the bros physically around you. No internet, accounts or servers.
+An iOS chat app where the only thing you can say is **bro**, in sixteen moods and two directions, or typed, to the bros physically around you. No internet, accounts or servers.
 
 ![Screens](docs/overview.jpg)
-![The sixteen bros](docs/stickers.png)
+![The eighteen bros](docs/stickers.png)
 
 ## How it works
 
 - **The Strip:** everyone nearby who is open.
 - **Direct:** bro one person. They get it if they're open, share a code with you, or you're answering them.
 - **Crews:** everyone has a code like `BRO-XXXX-XXXX`. Anyone holding it is in your room whenever they're in range. Share it out loud, as a link, or by QR.
+- **Directions:** "bro, go to entrance" and "bro, go to checkout".
+- **Typed bro:** there's a keyboard, and it can only type bro. It sends the word with no sticker.
 - **Code only:** invisible to everyone except people who share a code with you.
 - **Two radios:** Bluetooth LE (no signal needed, relays through up to four phones) and same Wi-Fi (Bonjour and TCP).
 - **Shouts:** an open bro is also packed into a Bluetooth advertisement, so phones hear it without connecting.
 
-There is no text field in the protocol. Names are picked from a list and a message is one byte of mood.
+There is no text in the protocol. Names are picked from a list and a message is one byte: a mood, a direction, or "typed".
 
 ## Put it on your iPhone
 
