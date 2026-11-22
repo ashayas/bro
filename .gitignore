@@ -1,0 +1,9 @@
+# Local agent state and reference material: never published
+.agent-grid/
+.DS_Store
+.build/
+build/
+DerivedData/
+*.xcresult
+xcuserdata/
+Config/Local.xcconfig
