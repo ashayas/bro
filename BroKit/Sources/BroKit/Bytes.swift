@@ -63,6 +63,8 @@ struct RecentSet<Element: Hashable> {
 
     init(capacity: Int) { self.capacity = capacity }
 
+    func contains(_ element: Element) -> Bool { members.contains(element) }
+
     /// Returns false if the element was already present.
     @discardableResult
     mutating func insert(_ element: Element) -> Bool {

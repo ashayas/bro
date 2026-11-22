@@ -189,6 +189,28 @@ final class BLETransportTests: XCTestCase {
         withExtendedLifetime(b) {}
     }
 
+    func testAdvertisingFailureRecovers() {
+        Air.shared.failingAdvertisements = 1
+        let a = phone()
+        a.setBackground(true) // can't find b by itself, so b has to hear a's advert
+        let b = phone()
+        until("advertising retried") { b.sees(a) && b.radio.links.count == 2 }
+    }
+
+    func testDepartedPeersDoNotHoldEveryConnectionSlot() {
+        let me = phone()
+        let departed = (0..<6).map { _ in phone() }
+        until("six links", timeout: 25) { me.radio.links.count == 12 }
+        me.setBackground(false)
+        departed.forEach { Air.shared.setInRange(me.device, $0.device, false) }
+        until("all gone") { me.radio.links.isEmpty }
+        let staleAfter = Date().addingTimeInterval(5)
+        until("slots go stale", timeout: 8) { Date() > staleAfter }
+        let newcomer = phone()
+        departed.forEach { Air.shared.setInRange(newcomer.device, $0.device, false) }
+        until("room for the newcomer", timeout: 9) { me.radio.links.count == 2 }
+    }
+
     func testPermissionDenied() {
         let device = Air.shared.device()
         device.authorized = false

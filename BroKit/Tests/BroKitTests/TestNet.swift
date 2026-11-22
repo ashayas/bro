@@ -14,6 +14,7 @@ final class TestNet {
         var status: TransportStatus = .ready
         var links: Set<LinkID> = []
         var shouts: [AirShout] = []
+        var cancelledShouts = 0
         var onPacket: ((Data, LinkID) -> Void)?
         var onLinkUp: ((LinkID) -> Void)?
         var onLinkDown: ((LinkID) -> Void)?
@@ -28,6 +29,7 @@ final class TestNet {
         func start() {}
         func stop() {}
         func shout(_ shout: AirShout) { shouts.append(shout) }
+        func cancelShouts() { cancelledShouts += 1 }
         func send(_ packet: Data, to link: LinkID) {
             guard links.contains(link), let other = Int(link) else { return }
             net.queue.append((id, other, packet))

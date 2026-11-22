@@ -17,6 +17,8 @@ public final class BLETransport: NSObject, BroTransport {
 
     private enum Limits {
         static let outgoingLinks = 6
+        static let provisionalWriters = 16
+        static let provisionalLifetime: TimeInterval = 30
         static let queuedBytes = 48 * 1024
         static let connectTimeout: TimeInterval = 15
         static let retryDelay: TimeInterval = 4
@@ -50,6 +52,7 @@ public final class BLETransport: NSObject, BroTransport {
         var queue: [Data] = []
         var queuedBytes = 0
         var ready = false
+        let created = Date()
 
         init(_ central: CBCentral) {
             self.central = central
@@ -178,6 +181,12 @@ public final class BLETransport: NSObject, BroTransport {
         if airTimer == nil { shoutNext() }
     }
 
+    public func cancelShouts() {
+        guard !shouts.isEmpty || airTimer != nil else { return }
+        endShouting()
+        advertiseBeacon()
+    }
+
     static func chunks(_ data: Data, size: Int) -> [Data] {
         let bytes = Array(data)
         return stride(from: 0, to: bytes.count, by: size).map {
@@ -202,7 +211,7 @@ public final class BLETransport: NSObject, BroTransport {
         }
         var next = shouts.removeFirst()
         manager.stopAdvertising()
-        manager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [CBUUID(data: next.shout.uuidBytes)]])
+        manager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [CBUUID(data: next.shout.uuidBytes())]])
         next.left -= 1
         if next.left > 0 { shouts.append(next) }
         airTimer = .scheduledTimer(withTimeInterval: Limits.shoutWindow, repeats: false) { [weak self] _ in
@@ -243,6 +252,15 @@ public final class BLETransport: NSObject, BroTransport {
     private func housekeep() {
         guard running, let central, central.state == .poweredOn else { return }
         let now = Date()
+        // startAdvertising can fail (another app has the radio). Keep asking.
+        if airTimer == nil, let manager = peripheralManager, manager.state == .poweredOn, !manager.isAdvertising {
+            advertiseBeacon()
+        }
+        // A writer that never subscribed never sends an unsubscribe either.
+        for (id, state) in incoming where !state.ready && now.timeIntervalSince(state.created) > Limits.provisionalLifetime {
+            incoming[id] = nil
+            onLinkDown?(state.link)
+        }
         // In the background a pending connect is how we get woken, so only give up in the foreground.
         if foreground {
             for (id, state) in outgoing where !state.ready && now.timeIntervalSince(state.started) > Limits.connectTimeout {
@@ -259,8 +277,14 @@ public final class BLETransport: NSObject, BroTransport {
     // MARK: Central side
 
     private func connect(_ peripheral: CBPeripheral) {
-        guard let central, central.state == .poweredOn, outgoing[peripheral.identifier] == nil,
-              outgoing.count < Limits.outgoingLinks else { return }
+        guard let central, central.state == .poweredOn, outgoing[peripheral.identifier] == nil else { return }
+        if outgoing.count >= Limits.outgoingLinks {
+            // Someone here now beats waiting for someone who left.
+            guard let stale = outgoing.values.filter({ !$0.ready }).min(by: { $0.started < $1.started }),
+                  Date().timeIntervalSince(stale.started) > Limits.retryDelay else { return }
+            outgoing[stale.peripheral.identifier] = nil
+            central.cancelPeripheralConnection(stale.peripheral)
+        }
         outgoing[peripheral.identifier] = Outgoing(peripheral)
         peripheral.delegate = self
         central.connect(peripheral, options: nil)
@@ -352,9 +376,12 @@ extension BLETransport: CBCentralManagerDelegate {
             dropOutgoing()
         case .unsupported:
             status = .unsupported
-        default:
+        case .resetting:
             status = .starting
             dropOutgoing()
+        default:
+            // .unknown comes before .poweredOn and must not wipe restored peripherals.
+            status = .starting
         }
     }
 
@@ -535,12 +562,19 @@ extension BLETransport: CBPeripheralManagerDelegate {
 
     public func peripheralManager(_ manager: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         guard let first = requests.first else { return }
-        // Answer once, for the first request, whatever the batch size.
+        // We chunk below the MTU, so an offset means a long write that isn't ours.
+        // A batch is all or nothing, and gets one response, for its first request.
+        guard requests.allSatisfy({ $0.offset == 0 && $0.characteristic.uuid == Self.streamUUID }) else {
+            manager.respond(to: first, withResult: .invalidOffset)
+            return
+        }
         manager.respond(to: first, withResult: .success)
         for request in requests {
-            guard request.characteristic.uuid == Self.streamUUID, let value = request.value else { continue }
+            guard let value = request.value else { continue }
+            let known = incoming[request.central.identifier]
+            if known == nil, incoming.values.filter({ !$0.ready }).count >= Limits.provisionalWriters { continue }
             // A write can beat the subscription callback.
-            let state = incoming[request.central.identifier] ?? Incoming(request.central)
+            let state = known ?? Incoming(request.central)
             incoming[request.central.identifier] = state
             state.framer.append(value).forEach { onPacket?($0, state.link) }
         }

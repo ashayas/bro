@@ -19,7 +19,7 @@ public enum Mood: UInt8, CaseIterable, Codable, Hashable {
         case .respect: return ("respect", "Respect", "bro o7", "🫡")
         case .sus: return ("sus", "Sus", "bro…?", "🤨")
         case .shocked: return ("shocked", "Shook", "BRO?!", "😱")
-        case .confused: return ("confused", "Lost it", "bro??", "🤷")
+        case .confused: return ("confused", "Huh", "bro??", "🤷")
         case .sad: return ("sad", "Sad", "bro…", "😭")
         case .sleepy: return ("sleepy", "Sleepy", "brozzz", "😴")
         case .wrecked: return ("wrecked", "Wrecked", "brughh", "🤢")

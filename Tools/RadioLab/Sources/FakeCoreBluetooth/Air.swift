@@ -34,6 +34,8 @@ public final class Air {
     public var mtu = 185
     /// Notifications accepted before `updateValue` starts returning false.
     public var notifyBuffer = 6
+    /// The next N `startAdvertising` calls fail.
+    public var failingAdvertisements = 0
     public private(set) var violations: [String] = []
     public private(set) var backpressureEvents = 0
     public private(set) var writes = 0

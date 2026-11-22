@@ -155,6 +155,14 @@ final class MeshTests: XCTestCase {
         XCTAssertEqual(a.acks.count, 1)
     }
 
+    func testCanStillBroSomeoneWhoWalkedOff() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle(); net.disconnect(a, b)
+        net.clock.advance(60); a.node.tick()
+        XCTAssertNil(a.node.peers[b.id])
+        XCTAssertNotNil(a.node.say(.sos, in: .direct(b.id)))
+    }
+
     func testPresenceExpires() {
         let net = TestNet(), a = net.user(), b = net.user()
         net.connect(a, b); net.settle(); net.disconnect(a, b)
@@ -220,6 +228,127 @@ final class MeshTests: XCTestCase {
         net.deliver()
         XCTAssertEqual(sent.count, 8)
         XCTAssertEqual(b.bros.count, 8)
+    }
+
+    func testRateLimitedBroIsNotAckedUntilAccepted() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle(); net.disconnect(a, b)
+        for _ in 0..<20 {
+            a.node.say(.hype, in: .direct(b.id))
+            net.clock.advance(1)
+        }
+        net.connect(a, b); net.deliver()
+        XCTAssertEqual(b.bros.count, 12)
+        XCTAssertEqual(Set(a.acks.map(\.id)), Set(b.bros.map(\.id)))
+        for _ in 0..<3 {
+            net.clock.advance(21); a.node.tick(); net.deliver()
+        }
+        XCTAssertEqual(b.bros.count, 20, "dropped bros must arrive on retry")
+    }
+
+    func testAckComesAfterTheAppHasTheBro() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle()
+        var queuedWhenSaved = -1
+        b.node.onEvent = { if case .bro = $0 { queuedWhenSaved = net.queue.count } }
+        a.node.say(.happy, in: .direct(b.id))
+        net.deliver()
+        XCTAssertEqual(queuedWhenSaved, 0)
+    }
+
+    func testFreshIdentitiesCannotFloodDirectBros() {
+        let net = TestNet(), victim = net.user()
+        for _ in 0..<70 {
+            let attacker = net.user()
+            attacker.node.contacts[victim.id] = victim.node.identity.agreementKey
+            net.connect(attacker, victim)
+            attacker.node.say(.angry, in: .direct(victim.id)); net.deliver()
+            net.disconnect(attacker, victim)
+        }
+        XCTAssertEqual(victim.bros.count, 40)
+    }
+
+    func testRotatingCodeRevokesPeopleYouMessaged() {
+        let net = TestNet(), me = net.user(open: false, rooms: [camp]), old = net.user(rooms: [camp])
+        net.connect(me, old); net.settle()
+        me.node.say(.happy, in: .direct(old.id)); net.deliver()
+        me.node.setRooms([boat], ownRoomID: boat.id); net.deliver()
+        old.node.say(.angry, in: .direct(me.id)); net.deliver()
+        XCTAssertTrue(me.bros.isEmpty)
+    }
+
+    func testLeavingARoomRemovesGhostPeers() {
+        let net = TestNet(), me = net.user(rooms: [camp]), other = net.user(open: false, rooms: [camp])
+        net.connect(me, other); net.settle()
+        me.node.setRooms([], ownRoomID: nil)
+        XCTAssertNil(me.node.peers[other.id])
+    }
+
+    func testLateBroCannotUndoGoodbye() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle()
+        net.clock.advance(1); a.node.say(.happy, in: .open)
+        let late = net.queue
+        net.queue.removeAll()
+        net.clock.advance(1); a.node.setOpen(false); net.deliver()
+        net.queue = late; net.deliver()
+        XCTAssertNil(b.node.peers[a.id])
+    }
+
+    func testClosingStopsShoutsAndCatchUp() {
+        let net = TestNet(), a = net.user(), late = net.user()
+        a.node.say(.party, in: .open)
+        a.node.setOpen(false)
+        XCTAssertEqual(a.port.cancelledShouts, 1)
+        net.connect(a, late); net.deliver()
+        XCTAssertTrue(late.bros.isEmpty)
+    }
+
+    func testUnsignedOpenJunkIsNotRelayed() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.deliver()
+        let before = net.traffic.count
+        a.node.receive(Envelope(kind: .open, payload: Data.random(120)).encoded, from: "stranger")
+        XCTAssertEqual(net.traffic.count, before)
+    }
+
+    func testOutboxSurvivesRelaunch() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        net.connect(a, b); net.settle(); net.disconnect(a, b)
+        let bro = a.node.say(.sad, in: .direct(b.id))!
+        let saved = try! JSONDecoder().decode([OutboxItem].self, from: JSONEncoder().encode(a.node.outbox))
+
+        let revived = TestNet.User(
+            node: MeshNode(identity: a.node.identity, name: a.node.name, now: { net.clock.now }),
+            port: TestNet.Port(id: net.users.count, net: net)
+        )
+        net.users.append(revived)
+        revived.node.contacts = [b.id: b.node.identity.agreementKey]
+        revived.node.outbox = saved
+        net.clock.advance(200)
+        net.connect(revived, b); net.deliver()
+        XCTAssertEqual(b.bros.map(\.id), [bro.id])
+        XCTAssertTrue(revived.node.outbox.isEmpty)
+    }
+
+    func testRetryDoesNotNeedVisiblePresence() {
+        let net = TestNet(), closed = net.user(open: false), open = net.user()
+        closed.node.contacts[open.id] = open.node.identity.agreementKey
+        net.connect(closed, open); net.settle()
+        closed.node.say(.chill, in: .direct(open.id)); net.deliver()
+        net.disconnect(closed, open)
+        let bro = open.node.say(.respect, in: .direct(closed.id))!
+        net.clock.advance(200)
+        net.connect(closed, open); net.deliver()
+        XCTAssertEqual(closed.bros.map(\.id), [bro.id])
+    }
+
+    func testBlockedNameIsMutedOnAir() {
+        let net = TestNet(), a = net.user(), b = net.user()
+        a.node.say(.angry, in: .open)
+        b.node.mutedNames = [a.node.name]
+        b.port.onShout?(a.port.shouts[0])
+        XCTAssertTrue(b.bros.isEmpty)
     }
 
     func testSealedTrafficLeaksNeitherCodeNorIdentity() {

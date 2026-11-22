@@ -6,14 +6,22 @@ import Network
 public final class LANTransport: BroTransport {
     public static let serviceType = "_brochat._tcp"
     private static let policyDenied: Int32 = -65570
-    private static let maxLinks = 32
+    private static let maxIncoming = 24
+    private static let maxOutgoing = 16
+    /// Every bro announces every 12 seconds, so silence this long isn't a bro.
+    private static let idleTimeout: TimeInterval = 45
+    private static let fallbackDelay: TimeInterval = 10
+    /// First byte of the hello frame. Envelopes start with their version, which is never zero.
+    private static let helloTag: UInt8 = 0
     private static let maxQueuedBytes = 96 * 1024
 
     private final class Link {
         let id: LinkID = "lan/\(UUID().uuidString)"
         let connection: NWConnection
-        let remoteName: String?
+        let isOutgoing: Bool
+        var remoteName: String?
         let created = Date()
+        var lastHeard = Date()
         var framer = StreamFramer()
         var ready = false
         var queuedBytes = 0
@@ -21,6 +29,7 @@ public final class LANTransport: BroTransport {
         init(_ connection: NWConnection, remoteName: String?) {
             self.connection = connection
             self.remoteName = remoteName
+            isOutgoing = remoteName != nil
         }
     }
 
@@ -104,7 +113,7 @@ public final class LANTransport: BroTransport {
         }
         listener.service = NWListener.Service(name: name, type: serviceType)
         listener.newConnectionHandler = { [weak self] connection in
-            guard let self, self.running, self.connections.count < Self.maxLinks else { return connection.cancel() }
+            guard let self, self.running, self.count(outgoing: false) < Self.maxIncoming else { return connection.cancel() }
             self.adopt(connection, remoteName: nil)
         }
         listener.stateUpdateHandler = { [weak self, weak listener] state in
@@ -168,14 +177,17 @@ public final class LANTransport: BroTransport {
         if browser == nil { startBrowser() }
 
         let now = Date()
-        for link in Array(connections.values) where !link.ready && now.timeIntervalSince(link.created) > 8 {
-            close(link)
+        for link in Array(connections.values) {
+            let neverConnected = !link.ready && now.timeIntervalSince(link.created) > 8
+            let wentSilent = link.ready && now.timeIntervalSince(link.lastHeard) > Self.idleTimeout
+            if neverConnected || wentSilent { close(link) }
         }
-        let dialled = Set(connections.values.compactMap(\.remoteName))
-        for (remote, entry) in found where !dialled.contains(remote) && connections.count < Self.maxLinks {
+        // Includes whoever dialled us, thanks to the hello.
+        let linked = Set(connections.values.compactMap(\.remoteName))
+        for (remote, entry) in found where !linked.contains(remote) && count(outgoing: true) < Self.maxOutgoing {
             // Lower name dials. If discovery only worked one way, dial anyway after a wait.
             let isCaller = name < remote
-            let isStranded = links.isEmpty && now.timeIntervalSince(entry.since) > 8
+            let isStranded = now.timeIntervalSince(entry.since) > Self.fallbackDelay
             if isCaller || isStranded {
                 adopt(NWConnection(to: entry.endpoint, using: parameters()), remoteName: remote)
             }
@@ -191,7 +203,9 @@ public final class LANTransport: BroTransport {
             case .ready:
                 guard !link.ready, self.connections[link.id] != nil else { return }
                 link.ready = true
+                link.lastHeard = Date()
                 self.receive(link)
+                self.send(Data([Self.helloTag]) + Data(self.name.utf8), to: link.id)
                 self.onLinkUp?(link.id)
             case .failed, .cancelled:
                 self.close(link)
@@ -205,13 +219,28 @@ public final class LANTransport: BroTransport {
     private func receive(_ link: Link) {
         link.connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self, weak link] data, _, done, error in
             guard let self, let link, self.connections[link.id] != nil else { return }
-            if let data { link.framer.append(data).forEach { self.onPacket?($0, link.id) } }
+            if let data { link.framer.append(data).forEach { self.handle($0, on: link) } }
             if done || error != nil {
                 self.close(link)
             } else {
                 self.receive(link)
             }
         }
+    }
+
+    private func handle(_ frame: Data, on link: Link) {
+        link.lastHeard = Date()
+        guard frame.first == Self.helloTag else {
+            onPacket?(frame, link.id)
+            return
+        }
+        guard let remote = String(data: frame.dropFirst(), encoding: .utf8), remote.count == 16 else { return }
+        if remote == name { return close(link) }
+        if link.remoteName == nil { link.remoteName = remote }
+    }
+
+    private func count(outgoing: Bool) -> Int {
+        connections.values.filter { $0.isOutgoing == outgoing }.count
     }
 
     private func close(_ link: Link) {

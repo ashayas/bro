@@ -23,8 +23,11 @@ public protocol BroTransport: AnyObject {
     func send(_ packet: Data, to link: LinkID)
     /// Connectionless broadcast, where the radio supports it.
     func shout(_ shout: AirShout)
+    /// Stop shouting now: the user went code only.
+    func cancelShouts()
 }
 
 public extension BroTransport {
     func shout(_ shout: AirShout) {}
+    func cancelShouts() {}
 }

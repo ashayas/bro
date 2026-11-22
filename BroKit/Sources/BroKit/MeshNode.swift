@@ -34,6 +34,15 @@ public struct Bro: Identifiable, Codable, Equatable {
     public var airToken: String { String(id.prefix(16)) }
 }
 
+/// A direct bro that hasn't been acknowledged yet. Persist it to keep trying after a relaunch.
+public struct OutboxItem: Codable, Equatable {
+    public let id: String
+    let peerID: String
+    let signed: Data
+    let created: Date
+    var attempted: Date
+}
+
 public enum MeshEvent {
     case bro(Bro)
     case ack(broID: String, channel: Channel, from: String)
@@ -49,15 +58,18 @@ public final class MeshNode {
         public static let presenceLifetime: TimeInterval = 40
         public static let maxClockSkew: TimeInterval = 15 * 60
         public static let retryInterval: TimeInterval = 8
+        public static let backgroundRetryInterval: TimeInterval = 20
         public static let relayMemory: TimeInterval = 120
     }
 
     public static let maxRooms = 12
     private static let maxPeers = 300
     private static let maxAckedRoomSize = 12
+    private static let maxContacts = 1000
+    private static let maxOutbox = 100
 
     public let identity: Identity
-    public var myID: String { identity.peerID }
+    public let myID: String
     public var onEvent: ((MeshEvent) -> Void)?
 
     public private(set) var name: BroName
@@ -79,6 +91,8 @@ public final class MeshNode {
     public var roommates: [String: Set<String>] = [:]
     /// People we messaged first. They can answer even if we're closed.
     public var invited: Set<String> = []
+    /// Shouts carry no identity, so blocking can only match them by name.
+    public var mutedNames: Set<BroName> = []
 
     private let now: () -> Date
     private var transports: [BroTransport] = []
@@ -86,22 +100,22 @@ public final class MeshNode {
     private var linkBudgets: [LinkID: TokenBucket] = [:]
     private var senderBudgets: [String: TokenBucket] = [:]
     private var openBudget = TokenBucket(rate: 10, burst: 40)
+    private var directBudget = TokenBucket(rate: 5, burst: 40)
+    private var relayBudget = TokenBucket(rate: 80, burst: 500)
     private var sendBudget = TokenBucket(rate: 2, burst: 8)
     private var seenPackets = RecentSet<Data>(capacity: 8000)
     private var seenEvents = RecentSet<String>(capacity: 4000)
     private var seenShouts = RecentSet<Data>(capacity: 1000)
     private var latestPresence: [String: UInt64] = [:]
-    private var recent: [(envelope: Envelope, at: Date)] = []
-    private var pending: [String: PendingDirect] = [:]
+    private var recent: [(envelope: Envelope, at: Date, isMine: Bool)] = []
+    private var pending: [String: OutboxItem] = [:]
     private var lastPresence = Date.distantPast
     private var presenceRequested = false
     private var timer: Timer?
 
-    private struct PendingDirect {
-        let peerID: String
-        let signed: Data
-        let created: Date
-        var attempted: Date
+    public var outbox: [OutboxItem] {
+        get { pending.values.sorted { ($0.created, $0.id) < ($1.created, $1.id) } }
+        set { pending = Dictionary(newValue.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) }
     }
 
     public init(
@@ -109,6 +123,7 @@ public final class MeshNode {
         now: @escaping () -> Date = Date.init
     ) {
         self.identity = identity
+        myID = identity.peerID
         self.name = name
         self.mood = mood
         self.isOpen = isOpen
@@ -117,10 +132,11 @@ public final class MeshNode {
 
     // MARK: Lifecycle
 
-    public func start() {
+    /// Pass `false` when the caller switches radios on and off itself.
+    public func start(startingTransports: Bool = true) {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
-        transports.forEach { $0.start() }
+        if startingTransports { transports.forEach { $0.start() } }
         requestPresence()
     }
 
@@ -163,6 +179,11 @@ public final class MeshNode {
         pending = pending.filter { time.timeIntervalSince($0.value.created) < Timing.maxClockSkew }
         if senderBudgets.count > 2000 { senderBudgets.removeAll() }
         if latestPresence.count > 4000 { latestPresence.removeAll() }
+        if linkBudgets.count > 500 { linkBudgets = linkBudgets.filter { linkOwners[$0.key] != nil } }
+        if contacts.count > Self.maxContacts {
+            contacts = contacts.filter { invited.contains($0.key) || peers[$0.key] != nil }
+        }
+        if !linkOwners.isEmpty { retryPending(after: Timing.backgroundRetryInterval) }
 
         if presenceRequested || time.timeIntervalSince(lastPresence) >= Timing.presenceInterval {
             announce()
@@ -171,6 +192,11 @@ public final class MeshNode {
 
     /// Coalesced onto the next tick, so a burst of new links means one announcement.
     public func requestPresence() { presenceRequested = true }
+
+    /// Seed from saved history, so a relaunch doesn't show the same bro twice.
+    public func remember(broIDs: [String]) {
+        broIDs.forEach { seenEvents.insert($0) }
+    }
 
     // MARK: Settings
 
@@ -183,7 +209,12 @@ public final class MeshNode {
 
     public func setOpen(_ open: Bool) {
         guard open != isOpen else { return }
-        if !open { post(.goodbye, in: .open) }
+        if !open {
+            transports.forEach { $0.cancelShouts() }
+            // Nobody who arrives later should be handed what we said while open.
+            recent.removeAll { $0.isMine && $0.envelope.kind == .open }
+            post(.goodbye, in: .open)
+        }
         isOpen = open
         requestPresence()
         onEvent?(.peersChanged)
@@ -194,8 +225,13 @@ public final class MeshNode {
         let keptIDs = Set(kept.map(\.id))
         for room in rooms where !keptIDs.contains(room.id) {
             post(.goodbye, in: .room(room.id))
-            roommates[room.id] = nil
-            for id in peers.keys { peers[id]?.roomsSeen[room.id] = nil }
+            let revoked = roommates.removeValue(forKey: room.id) ?? []
+            // Having messaged someone must not outlive the code they got in with.
+            invited.subtract(revoked.filter { id in !roommates.values.contains { $0.contains(id) } })
+            for (id, var peer) in peers where peer.isIn(room: room.id) {
+                peer.roomsSeen[room.id] = nil
+                peers[id] = peer.openSeen == nil && peer.roomsSeen.isEmpty ? nil : peer
+            }
         }
         rooms = kept
         self.ownRoomID = ownRoomID
@@ -220,7 +256,10 @@ public final class MeshNode {
             transports.forEach { $0.shout(shout) }
         case let .direct(peerID):
             invited.insert(peerID)
-            pending[id] = PendingDirect(peerID: peerID, signed: message.signed, created: time, attempted: time)
+            pending[id] = OutboxItem(id: id, peerID: peerID, signed: message.signed, created: time, attempted: time)
+            if pending.count > Self.maxOutbox, let oldest = pending.values.min(by: { $0.created < $1.created }) {
+                pending[oldest.id] = nil
+            }
         case .room:
             break
         }
@@ -275,12 +314,12 @@ public final class MeshNode {
 
     private func originate(_ envelope: Envelope) {
         seenPackets.insert(envelope.id)
-        remember(envelope)
+        remember(envelope, isMine: true)
         flood(envelope, except: nil)
     }
 
-    private func remember(_ envelope: Envelope) {
-        recent.append((envelope, now()))
+    private func remember(_ envelope: Envelope, isMine: Bool) {
+        recent.append((envelope, now(), isMine))
         if recent.count > 160 { recent.removeFirst(recent.count - 160) }
     }
 
@@ -299,6 +338,7 @@ public final class MeshNode {
             transport.send(item.envelope.encoded, to: link)
         }
         requestPresence()
+        retryPending(after: Timing.retryInterval)
         onEvent?(.linksChanged)
     }
 
@@ -309,18 +349,22 @@ public final class MeshNode {
         linkBudgets[link] = budget
         guard allowed, let envelope = Envelope(data), seenPackets.insert(envelope.id) else { return }
 
-        if envelope.ttl > 0 {
+        // Open packets can be checked, so junk stops here. Sealed ones only get a budget.
+        var openMessage: Message?
+        if envelope.kind == .open {
+            guard let message = Message(envelope.payload, kind: .open, context: Data()) else { return }
+            openMessage = message
+        }
+        if envelope.ttl > 0, relayBudget.take(at: time) {
             var onward = envelope
             onward.ttl -= 1
-            remember(onward)
+            remember(onward, isMine: false)
             flood(onward, except: link)
         }
 
         switch envelope.kind {
         case .open:
-            if let message = Message(envelope.payload, kind: .open, context: Data()) {
-                handle(message, in: .open)
-            }
+            if let openMessage { handle(openMessage, in: .open) }
         case .room:
             for room in rooms {
                 guard let plain = Seal.openRoom(envelope.payload, key: room.symmetricKey) else { continue }
@@ -350,7 +394,7 @@ public final class MeshNode {
         case let .presence(mood, isHost):
             guard isNewest(message, in: channel) else { return }
             saw(message, in: channel, sent: sent, mood: mood, isHost: isHost)
-            retryPending(for: sender)
+            retryPending(after: Timing.retryInterval, for: sender)
         case .goodbye:
             guard isNewest(message, in: channel), var peer = peers[sender] else { return }
             switch channel {
@@ -373,8 +417,8 @@ public final class MeshNode {
         guard mayReceive(from: message.senderID, in: channel) else { return }
 
         let id = message.eventID.hex
-        guard seenEvents.insert(id) else {
-            // A retry means our ack went missing.
+        guard !seenEvents.contains(id) else {
+            // A retry of something we accepted means our ack went missing.
             if case .direct = channel { post(.ack(message.eventID), in: channel) }
             return
         }
@@ -383,24 +427,31 @@ public final class MeshNode {
         senderBudgets[message.senderID] = budget
         guard allowed else { return }
 
+        var shouldAck = false
         switch channel {
         case .open:
             guard openBudget.take(at: time) else { return }
             seenShouts.insert(Data(message.eventID.prefix(8)))
-            saw(message, in: channel, sent: sent, mood: mood, isHost: nil)
+            if isNewest(message, in: channel) { saw(message, in: channel, sent: sent, mood: mood, isHost: nil) }
         case let .room(roomID):
-            saw(message, in: channel, sent: sent, mood: mood, isHost: nil)
-            let others = peers.values.filter { $0.isIn(room: roomID) }.count
-            if others <= Self.maxAckedRoomSize { post(.ack(message.eventID), in: channel) }
+            // A late bro must not undo a newer goodbye.
+            if isNewest(message, in: channel) { saw(message, in: channel, sent: sent, mood: mood, isHost: nil) }
+            shouldAck = peers.values.filter { $0.isIn(room: roomID) }.count <= Self.maxAckedRoomSize
         case .direct:
+            // Caps the total, since fresh identities dodge the per-sender limit.
+            guard directBudget.take(at: time) else { return }
             contacts[message.senderID] = message.agreementKey
-            post(.ack(message.eventID), in: channel)
+            shouldAck = true
         }
+        // Only once admitted: a dropped bro must be retryable, and must not be acked.
+        seenEvents.insert(id)
 
         onEvent?(.bro(Bro(
             id: id, channel: channel, senderID: message.senderID, name: message.name, mood: mood,
             date: min(sent, time), isMine: false, isVerified: true
         )))
+        // Ack last: the app has saved it by now.
+        if shouldAck { post(.ack(message.eventID), in: channel) }
     }
 
     /// The product rule: open to you, or holds a code you share.
@@ -422,10 +473,11 @@ public final class MeshNode {
     private func saw(_ message: Message, in channel: Channel, sent: Date, mood: Mood, isHost: Bool?) {
         let time = min(sent, now())
         let id = message.senderID
+        // Keep the key after they walk off, so you can still bro them and retries still seal.
+        contacts[id] = message.agreementKey
         if case let .room(roomID) = channel, (roommates[roomID]?.count ?? 0) < 200 {
             // Membership outlives presence: they still hold the code.
             roommates[roomID, default: []].insert(id)
-            contacts[id] = message.agreementKey
         }
         // A replayed two-minute-old packet must not put someone back on the radar.
         guard now().timeIntervalSince(time) <= Timing.presenceLifetime else { return }
@@ -449,19 +501,19 @@ public final class MeshNode {
         onEvent?(.peersChanged)
     }
 
-    private func retryPending(for peerID: String) {
+    private func retryPending(after interval: TimeInterval, for peerID: String? = nil) {
         let time = now()
         for (id, item) in pending
-        where item.peerID == peerID && time.timeIntervalSince(item.attempted) >= Timing.retryInterval {
+        where (peerID == nil || item.peerID == peerID) && time.timeIntervalSince(item.attempted) >= interval {
             // Same signed bro, fresh seal: new packet to the relays, same event to the recipient.
-            guard let key = key(for: peerID), let payload = Seal.direct(item.signed, to: key) else { continue }
+            guard let key = key(for: item.peerID), let payload = Seal.direct(item.signed, to: key) else { continue }
             pending[id]?.attempted = time
             originate(Envelope(kind: .direct, payload: payload))
         }
     }
 
     private func hear(_ shout: AirShout) {
-        guard isOpen, seenShouts.insert(shout.token), openBudget.take(at: now()) else { return }
+        guard isOpen, !mutedNames.contains(shout.name), seenShouts.insert(shout.token), openBudget.take(at: now()) else { return }
         onEvent?(.bro(Bro(
             id: shout.token.hex, channel: .open, senderID: "air:\(shout.token.hex)",
             name: shout.name, mood: shout.mood, date: now(), isMine: false, isVerified: false

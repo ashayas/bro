@@ -1,0 +1,5 @@
+// Put your team in Config/Local.xcconfig (gitignored):
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   BRO_BUNDLE_ID = com.you.brochat
+BRO_BUNDLE_ID = com.ashayas.brochat
+#include? "Local.xcconfig"

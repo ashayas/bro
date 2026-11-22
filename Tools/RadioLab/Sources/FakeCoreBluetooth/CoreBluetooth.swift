@@ -16,7 +16,7 @@ public enum CBPeripheralState { case disconnected, connecting, connected, discon
 public enum CBCharacteristicWriteType { case withResponse, withoutResponse }
 
 public struct CBATTError: Error {
-    public enum Code { case success, unlikelyError }
+    public enum Code { case success, invalidOffset }
 }
 
 public struct CBCharacteristicProperties: OptionSet {
@@ -75,6 +75,7 @@ public final class CBATTRequest: NSObject {
     public let central: CBCentral
     public let characteristic: CBCharacteristic
     public var value: Data?
+    public var offset = 0
     let answer: () -> Void
 
     init(central: CBCentral, characteristic: CBCharacteristic, value: Data, answer: @escaping () -> Void) {
@@ -264,6 +265,7 @@ public final class CBPeripheralManager: NSObject {
     let restoreID: String?
     var services: [CBMutableService] = []
     var advertising: [CBUUID]?
+    public var isAdvertising: Bool { advertising != nil }
     private var remotes: [UUID: CBCentral] = [:]
     private var buffer: [(value: Data, uuid: CBUUID, centrals: [CBCentral])] = []
     private var wasFull = false
@@ -340,6 +342,10 @@ public final class CBPeripheralManager: NSObject {
         let uuids = data?[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
         // 28 bytes of foreground payload, 18 per 128-bit UUID.
         if uuids.count * 18 > 28 { Air.shared.violate("advertisement over 28 bytes") }
+        if Air.shared.failingAdvertisements > 0 {
+            Air.shared.failingAdvertisements -= 1
+            return
+        }
         advertising = uuids
     }
 

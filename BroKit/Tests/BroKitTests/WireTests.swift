@@ -119,13 +119,21 @@ final class WireTests: XCTestCase {
 
     func testShoutFitsExactlyInAUUID() {
         let shout = AirShout(mood: .party, name: broName, eventID: Data.random(16))
-        XCTAssertEqual(shout.uuidBytes.count, 16)
-        XCTAssertEqual(AirShout(uuidBytes: shout.uuidBytes), shout)
+        let time = Date(timeIntervalSince1970: 1_800_000_000), bytes = shout.uuidBytes(at: time)
+        XCTAssertEqual(bytes.count, 16)
+        XCTAssertEqual(AirShout(uuidBytes: bytes, at: time), shout)
         for index in 0..<16 {
-            var bad = shout.uuidBytes
+            var bad = bytes
             bad[index] ^= 1
-            XCTAssertNil(AirShout(uuidBytes: bad))
+            XCTAssertNil(AirShout(uuidBytes: bad, at: time))
         }
+    }
+
+    func testRecordedShoutExpires() {
+        let shout = AirShout(mood: .party, name: broName, eventID: Data(repeating: 4, count: 16))
+        let time = Date(timeIntervalSince1970: 1_800_000_000), bytes = shout.uuidBytes(at: time)
+        XCTAssertNotNil(AirShout(uuidBytes: bytes, at: time.addingTimeInterval(540)))
+        XCTAssertNil(AirShout(uuidBytes: bytes, at: time.addingTimeInterval(1300)))
     }
 
     func testHostileBytesNeverCrash() {
