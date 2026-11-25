@@ -5,6 +5,24 @@ An iOS chat app where the only thing you can say is **bro**, in sixteen moods an
 ![Screens](docs/overview.jpg)
 ![The eighteen bros](docs/stickers.png)
 
+## Open source
+
+This is the source of [Bro App on the App Store](https://apps.apple.com/app/id6838038967). It's a hobby project: a SwiftUI iPhone app plus `BroKit`, a small Swift package with the protocol, encrypted mesh, and Bluetooth and LAN transports. There's no server.
+
+- **Build it:** see [Put it on your iPhone](#put-it-on-your-iphone) and [Tests](#tests) below. You need your own Apple developer team ID in `Config/Local.xcconfig`.
+- **Least tested:** real Bluetooth between physical phones. The transport is tested against a simulated CoreBluetooth, and the Simulator has no Bluetooth. Bug reports from real devices are the most useful kind.
+- **Privacy policy:** <https://vartabase.com/bro/privacy-policy>
+- **Support:** <https://vartabase.com/bro/support>
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md). **Security issues:** [SECURITY.md](SECURITY.md), not public issues.
+
+### License
+
+The code is under the [MIT License](LICENSE), Copyright (c) 2026 VARTABASE AI inc.
+
+The Brody stickers, the scenes and the app icon were generated with OpenAI image generation from text prompts and our own master image (`Design/`). AI-generated images may have limited or no copyright protection, so we can't promise exclusive rights in them. Brody is an original character, not based on any other franchise's character.
+
+Third-party fonts keep their own licences: Anton under the SIL Open Font License 1.1 (`Design/LICENSE-Anton.txt`) and Yellowtail under the Apache License 2.0 (`Design/LICENSE-Yellowtail.txt`). The sounds are synthesised by `Scripts/make_sounds.py`, with no samples.
+
 ## How it works
 
 - **The Strip:** everyone nearby who is open.
